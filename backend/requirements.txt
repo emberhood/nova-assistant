@@ -1,0 +1,23 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+websockets==13.1
+python-dotenv==1.0.1
+
+# Voice pipeline
+pvporcupine            # custom wake word "Arthur" (primary)
+openwakeword==0.6.0    # hey_jarvis fallback until Porcupine is configured
+faster-whisper==1.0.3   # local fallback if no GROQ_API_KEY
+groq                    # cloud STT — Whisper large-v3, free tier
+edge-tts==6.1.12        # Greek TTS, male voice NestorasNeural
+gTTS                    # Google TTS fallback
+miniaudio               # mp3 decode → PCM (no ffmpeg needed)
+sounddevice==0.4.7      # audio record + playback
+numpy==1.26.4
+scipy==1.13.1
+
+# Apple Calendar via iCloud CalDAV
+caldav==1.3.9
+icalendar==6.0.0
+
+# Speaker verification (optional)
+resemblyzer==0.1.4

@@ -1,0 +1,67 @@
+.jarvis-overlay-badge {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 8px 8px;
+
+  background: rgba(8, 14, 26, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 212, 255, 0.18);
+  border-radius: 56px;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255,255,255,0.03);
+
+  pointer-events: none;
+  max-width: 300px;
+}
+
+/* Scale down the orb */
+.badge-orb {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: visible;
+}
+
+.badge-orb .orb-wrap  { width: 48px; height: 48px; }
+.badge-orb .orb-core  { width: 30px; height: 30px; }
+.badge-orb .orb-ring  { width: calc(28px + calc(var(--i) * 10px)); height: calc(28px + calc(var(--i) * 10px)); }
+.badge-orb .orb-arc   { width: 40px; height: 40px; }
+.badge-orb .orb-arc-2 { width: 33px; height: 33px; }
+.badge-orb .orb-letter { font-size: 12px; }
+.badge-orb .orb-wave  { bottom: -8px; gap: 2px; }
+.badge-orb .wave-bar  { width: 2px; height: 14px; }
+
+.badge-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.badge-state {
+  font-family: var(--font-hud, 'Orbitron', monospace);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.badge-detail {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+  display: block;
+}
