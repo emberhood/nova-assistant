@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import JarvisOrb from './JarvisOrb.jsx'
-import './JarvisOverlay.css'
+import NovaOrb from './NovaOrb.jsx'
+import './NovaOverlay.css'
 
 const STATE_LABEL = {
   listening:  'Ακούω...',
@@ -8,27 +8,27 @@ const STATE_LABEL = {
   speaking:   'Μιλάω...',
 }
 
-export default function JarvisOverlay({ jarvisState, lastHeard, lastResponse }) {
-  const active = jarvisState !== 'idle'
+export default function NovaOverlay({ novaState, lastHeard, lastResponse }) {
+  const active = novaState !== 'idle'
 
   return (
     <AnimatePresence>
       {active && (
         <motion.div
-          className="jarvis-overlay-badge"
+          className="nova-overlay-badge"
           initial={{ opacity: 0, x: 40 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{    opacity: 0, x: 40 }}
           transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
         >
           <div className="badge-orb">
-            <JarvisOrb state={jarvisState} />
+            <NovaOrb state={novaState} />
           </div>
 
           <div className="badge-text">
-            <span className="badge-state">{STATE_LABEL[jarvisState]}</span>
+            <span className="badge-state">{STATE_LABEL[novaState]}</span>
             <AnimatePresence mode="wait">
-              {jarvisState === 'speaking' && lastResponse && (
+              {novaState === 'speaking' && lastResponse && (
                 <motion.span
                   key="resp"
                   className="badge-detail"
@@ -39,7 +39,7 @@ export default function JarvisOverlay({ jarvisState, lastHeard, lastResponse }) 
                   {lastResponse}
                 </motion.span>
               )}
-              {jarvisState === 'processing' && lastHeard && (
+              {novaState === 'processing' && lastHeard && (
                 <motion.span
                   key="heard"
                   className="badge-detail"

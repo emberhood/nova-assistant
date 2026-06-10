@@ -1,12 +1,12 @@
 """
-Speaker verification — Jarvis responds only to the enrolled voice.
+Speaker verification — Nova responds only to the enrolled voice.
 
 Workflow:
   1. First run: enroll by calling enroll_voice() or via POST /api/voice/enroll
   2. Every command: verify() is called automatically before routing
   3. If similarity < THRESHOLD, command is rejected
 
-Profile saved to: jarvis/backend/voice_profile.npy
+Profile saved to: nova-assistant/backend/voice_profile.npy
 Threshold: 0.75 (tune up for stricter, down for more lenient)
 """
 
@@ -58,6 +58,7 @@ def enroll_voice(audio_int16: np.ndarray, sample_rate: int = 16000) -> str:
         wav = preprocess_wav(audio_f32, source_sr=sample_rate)
         embedding = enc.embed_utterance(wav)
         np.save(PROFILE_PATH, embedding)
+        # still "Hey Jarvis" — wake word becomes "Hey Nova" once the custom model is trained
         return f"Voice enrolled. Profile saved. Say 'Hey Jarvis' to test."
     except Exception as e:
         return f"Enrollment failed: {e}"
@@ -107,7 +108,7 @@ def verify(audio_int16: np.ndarray, sample_rate: int = 16000) -> tuple[bool, flo
     Compare audio against the enrolled profile.
     Returns (is_owner, similarity_score).
     If not enrolled or resemblyzer not available, always returns (True, 1.0)
-    so Jarvis keeps working without verification.
+    so Nova keeps working without verification.
     """
     enc = _get_encoder()
     if enc is None or not is_enrolled():

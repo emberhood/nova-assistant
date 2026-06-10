@@ -11,7 +11,7 @@ from scipy.io import wavfile
 
 # Domain hint — reduces hallucinations on app names / Greek commands
 _PROMPT = (
-    "Jarvis. Άνοιξε, κλείσε, γύρνα, πήγαινε, δείξε, σταμάτα, κλείδωσε. "
+    "Nova. Άνοιξε, κλείσε, γύρνα, πήγαινε, δείξε, σταμάτα, κλείδωσε. "
     "Spotify, Chrome, Firefox, Discord, Notepad, Visual Studio Code. "
     "Calendar, ημερολόγιο, budget, έξοδα, υπόλοιπο, dashboard, αρχική. "
     "Ανδριανά, εφαρμογή, application, tab. "

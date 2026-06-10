@@ -1,5 +1,5 @@
 """
-Apple Calendar skill for Jarvis via iCloud CalDAV.
+Apple Calendar skill for Nova via iCloud CalDAV.
 Supports multiple users (owner, andriana) and a shared calendar.
 
 Setup (one-time per user):
@@ -285,7 +285,7 @@ def create_event(title: str, start_dt: datetime, duration_minutes: int = 60, use
         import uuid
 
         ical = iCal()
-        ical.add("prodid", "-//Jarvis//EN")
+        ical.add("prodid", "-//Nova//EN")
         ical.add("version", "2.0")
         event = iEvent()
         event.add("summary", title)

@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
-import './JarvisOrb.css'
+import './NovaOrb.css'
 
-export default function JarvisOrb({ state = 'idle' }) {
+export default function NovaOrb({ state = 'idle' }) {
   const isListening = state === 'listening'
   const isSpeaking  = state === 'speaking'
 
@@ -52,7 +52,7 @@ export default function JarvisOrb({ state = 'idle' }) {
         transition={{ duration: isListening ? 0.6 : isSpeaking ? 0.4 : 2.5, repeat: Infinity, ease: 'easeInOut' }}
       >
         <div className="orb-inner-ring" />
-        <span className="orb-letter">J</span>
+        <span className="orb-letter">N</span>
       </motion.div>
 
       {/* waveform bars when speaking */}

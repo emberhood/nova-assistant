@@ -62,7 +62,7 @@ export default function BudgetPanel({ data }) {
     <div className="panel budget-panel">
       {display._isMock && (
         <div className="budget-notice">
-          <span>◈ Backend offline — start the Jarvis backend to connect Vibe-Budgeting</span>
+          <span>◈ Backend offline — start the Nova backend to connect Vibe-Budgeting</span>
         </div>
       )}
       {/* Header metrics */}

@@ -1,8 +1,8 @@
 #!/bin/bash
-# Jarvis — Linux setup script (Ubuntu/Debian)
+# Nova — Linux setup script (Ubuntu/Debian)
 set -e
 
-echo "=== Jarvis Linux Setup ==="
+echo "=== Nova Linux Setup ==="
 
 # 1. System dependencies
 echo "[1/4] Installing system packages..."
@@ -31,7 +31,7 @@ npm install
 echo ""
 echo "=== Setup complete ==="
 echo ""
-echo "To start Jarvis:"
+echo "To start Nova:"
 echo "  Terminal 1 (backend):  cd backend && source .venv/bin/activate && python main.py"
 echo "  Terminal 2 (frontend): cd ui && npm run dev"
 echo ""

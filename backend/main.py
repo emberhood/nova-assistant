@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-app = FastAPI(title="Jarvis Backend")
+app = FastAPI(title="Nova Backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -71,7 +71,7 @@ async def startup():
     try:
         from voice import pipeline as vp
         vp.set_broadcast(broadcast_sync)
-        _pipeline = vp.JarvisPipeline()
+        _pipeline = vp.NovaPipeline()
         _pipeline.start()
     except ImportError as e:
         print(f"[Startup] Voice pipeline deps not installed yet: {e}")
@@ -297,7 +297,7 @@ async def voice_enroll():
             from voice import speaker_verify
             import sounddevice as sd
 
-            broadcast_sync({"type": "jarvis_state", "payload": "listening", "text": "Enrolling voice — speak for 12 seconds..."})
+            broadcast_sync({"type": "nova_state", "payload": "listening", "text": "Enrolling voice — speak for 12 seconds..."})
 
             # Record a fixed 12 seconds for enrollment (more data = better profile)
             sample_rate = 16000
@@ -308,9 +308,9 @@ async def voice_enroll():
 
             msg = speaker_verify.enroll_voice(audio_flat, sample_rate)
             print(f"[Enroll] {msg}")
-            broadcast_sync({"type": "jarvis_state", "payload": "idle", "text": msg})
+            broadcast_sync({"type": "nova_state", "payload": "idle", "text": msg})
         except Exception as e:
-            broadcast_sync({"type": "jarvis_state", "payload": "idle", "text": f"Enrollment error: {e}"})
+            broadcast_sync({"type": "nova_state", "payload": "idle", "text": f"Enrollment error: {e}"})
 
     threading.Thread(target=_do_enroll, daemon=True).start()
     return {"status": "started", "message": "Recording 12 seconds — speak normally for best results"}

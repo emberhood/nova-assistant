@@ -1,5 +1,5 @@
 """
-Jarvis voice pipeline orchestrator.
+Nova voice pipeline orchestrator.
 Wake word → Record → STT → AI Router → Execute Actions → TTS
 
 Architecture:
@@ -37,7 +37,7 @@ def is_busy() -> bool:
 
 def _notify(state: str, payload: dict | None = None):
     if _broadcast:
-        _broadcast({"type": "jarvis_state", "payload": state, **(payload or {})})
+        _broadcast({"type": "nova_state", "payload": state, **(payload or {})})
 
 
 def _execute_action(action: dict, speaker_user: str) -> str | None:
@@ -221,7 +221,7 @@ def _on_wake_word():
         _pipeline_lock.release()
 
 
-class JarvisPipeline:
+class NovaPipeline:
     def __init__(self):
         self._listener = WakeWordListener(
             on_detected=lambda: threading.Thread(target=_on_wake_word, daemon=True).start(),
@@ -231,7 +231,7 @@ class JarvisPipeline:
     def start(self):
         threading.Thread(target=_preload_models, daemon=True).start()
         self._listener.start()
-        print("[Pipeline] Jarvis pipeline started.")
+        print("[Pipeline] Nova pipeline started.")
 
     def stop(self):
         self._listener.stop()

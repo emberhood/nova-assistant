@@ -15,7 +15,7 @@ class ErrorBoundary extends Component {
 }
 import { AnimatePresence, motion } from 'framer-motion'
 import NavBar from './components/NavBar.jsx'
-import JarvisOverlay from './components/JarvisOverlay.jsx'
+import NovaOverlay from './components/NovaOverlay.jsx'
 import Dashboard from './panels/Dashboard.jsx'
 import CalendarPanel from './panels/CalendarPanel.jsx'
 import BudgetPanel from './panels/BudgetPanel.jsx'
@@ -33,7 +33,7 @@ const variants = {
 export default function App() {
   const [panel, setPanel]             = useState('dashboard')
   const [activeUser, setActiveUserRaw] = useState('owner')
-  const [jarvisState, setJarvisState]  = useState('idle')
+  const [novaState, setNovaState]  = useState('idle')
   const [lastHeard, setLastHeard]      = useState(null)
   const [lastResponse, setLastResponse]= useState(null)
   const [budgetData, setBudgetData]    = useState(null)
@@ -87,15 +87,15 @@ export default function App() {
     return () => clearInterval(id)
   }, [activeUser])
 
-  // WebSocket for real-time Jarvis state
+  // WebSocket for real-time Nova state
   useEffect(() => {
     const connect = () => {
       try {
         const ws = new WebSocket(`ws://${location.host}/ws`)
         ws.onmessage = (e) => {
           const msg = JSON.parse(e.data)
-          if (msg.type === 'jarvis_state') {
-            setJarvisState(msg.payload)
+          if (msg.type === 'nova_state') {
+            setNovaState(msg.payload)
             if (msg.heard) setLastHeard(msg.heard)
             if (msg.text)  setLastResponse(msg.text)
           } else if (msg.type === 'navigate') {
@@ -134,8 +134,8 @@ export default function App() {
       </div>
 
       {panel !== 'dashboard' && (
-        <JarvisOverlay
-          jarvisState={jarvisState}
+        <NovaOverlay
+          novaState={novaState}
           lastHeard={lastHeard}
           lastResponse={lastResponse}
         />
@@ -144,7 +144,7 @@ export default function App() {
       <NavBar
         active={panel}
         navigate={navigate}
-        jarvisState={jarvisState}
+        novaState={novaState}
         activeUser={activeUser}
         setActiveUser={setActiveUser}
       />
@@ -181,7 +181,7 @@ export default function App() {
             >
               {panel === 'dashboard' && (
                 <Dashboard
-                  jarvisState={jarvisState}
+                  novaState={novaState}
                   budgetData={budgetData}
                   calData={calData}
                   lastHeard={lastHeard}

@@ -1,5 +1,5 @@
 """
-User profiles for Jarvis multi-user support.
+User profiles for Nova multi-user support.
 Reads from environment variables — set them in .env
 """
 import os

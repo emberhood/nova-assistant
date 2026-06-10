@@ -27,7 +27,7 @@ const USERS = [
   { id: 'shared',   label: 'Shared',   initial: '♡', color: '#fbbf24' },
 ]
 
-export default function NavBar({ active, navigate, jarvisState, activeUser, setActiveUser }) {
+export default function NavBar({ active, navigate, novaState, activeUser, setActiveUser }) {
   return (
     <nav className="navbar glass-strong">
       <div className="navbar-brand">
@@ -79,11 +79,11 @@ export default function NavBar({ active, navigate, jarvisState, activeUser, setA
       <div className="navbar-status">
         <motion.div
           className="status-dot"
-          animate={{ backgroundColor: STATE_COLORS[jarvisState], boxShadow: `0 0 8px ${STATE_COLORS[jarvisState]}` }}
+          animate={{ backgroundColor: STATE_COLORS[novaState], boxShadow: `0 0 8px ${STATE_COLORS[novaState]}` }}
           transition={{ duration: 0.3 }}
         />
-        <span className="status-label" style={{ color: STATE_COLORS[jarvisState] }}>
-          {STATE_LABELS[jarvisState] || 'STANDBY'}
+        <span className="status-label" style={{ color: STATE_COLORS[novaState] }}>
+          {STATE_LABELS[novaState] || 'STANDBY'}
         </span>
       </div>
     </nav>

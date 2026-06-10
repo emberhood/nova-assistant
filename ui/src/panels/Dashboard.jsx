@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import JarvisOrb from '../components/JarvisOrb.jsx'
+import NovaOrb from '../components/NovaOrb.jsx'
 import './Dashboard.css'
 
 function useClock() {
@@ -47,7 +47,7 @@ function useEnrollStatus() {
 
 const USER_LABELS = { owner: 'My', andriana: "Andriana's" }
 
-export default function Dashboard({ jarvisState, budgetData, calData, lastHeard, lastResponse, activeUser = 'owner' }) {
+export default function Dashboard({ novaState, budgetData, calData, lastHeard, lastResponse, activeUser = 'owner' }) {
   const userLabel = USER_LABELS[activeUser] || 'My'
   const now = useClock()
   const enrollStatus = useEnrollStatus()
@@ -94,14 +94,15 @@ export default function Dashboard({ jarvisState, budgetData, calData, lastHeard,
         </div>
 
         <div className="dash-orb-area">
-          <JarvisOrb state={jarvisState} />
+          <NovaOrb state={novaState} />
           <div className="orb-state-label">
-            {jarvisState === 'idle'       && (lastResponse || 'Πες "Hey Jarvis"')}
-            {jarvisState === 'listening'  && 'Ακούω...'}
-            {jarvisState === 'processing' && 'Επεξεργάζομαι...'}
-            {jarvisState === 'speaking'   && 'Μιλάω...'}
+            {/* still "Hey Jarvis" — wake word becomes "Hey Nova" once the custom model is trained */}
+            {novaState === 'idle'       && (lastResponse || 'Πες "Hey Jarvis"')}
+            {novaState === 'listening'  && 'Ακούω...'}
+            {novaState === 'processing' && 'Επεξεργάζομαι...'}
+            {novaState === 'speaking'   && 'Μιλάω...'}
           </div>
-          {lastHeard && jarvisState === 'idle' && (
+          {lastHeard && novaState === 'idle' && (
             <div className="orb-heard">"{lastHeard}"</div>
           )}
           <button

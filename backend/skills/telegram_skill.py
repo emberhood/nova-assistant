@@ -1,15 +1,15 @@
 """
-Jarvis Telegram bot — remote control from anywhere.
+Nova Telegram bot — remote control from anywhere.
 
 Usage:
 1. Create a bot via @BotFather, get the token
-2. Add JARVIS_BOT_TOKEN to .env
-3. Start Jarvis backend — bot starts polling automatically
+2. Add NOVA_BOT_TOKEN to .env
+3. Start Nova backend — bot starts polling automatically
 
 Supported commands:
   /start          — welcome message
   /help           — list commands
-  /status         — is Jarvis online?
+  /status         — is Nova online?
   /balance        — budget summary
   /lock           — lock the PC
   /volume up|down — adjust volume
@@ -32,14 +32,14 @@ from urllib.request import Request, urlopen
 from skills.intent import classify
 from skills import pc_control, budget_skill, calendar_skill, haiku_skill
 
-BOT_TOKEN: str = os.getenv("JARVIS_BOT_TOKEN", "").strip()
+BOT_TOKEN: str = os.getenv("NOVA_BOT_TOKEN", "").strip()
 
 _POLL_TIMEOUT = 30
 _ERROR_SLEEP   = 5
 _IDLE_SLEEP    = 10
 
-# chat_ids allowed to control Jarvis (populated from JARVIS_ALLOWED_CHAT_IDS env)
-_ALLOWED: set[str] = set(filter(None, os.getenv("JARVIS_ALLOWED_CHAT_IDS", "").split(",")))
+# chat_ids allowed to control Nova (populated from NOVA_ALLOWED_CHAT_IDS env)
+_ALLOWED: set[str] = set(filter(None, os.getenv("NOVA_ALLOWED_CHAT_IDS", "").split(",")))
 
 _START_TIME = datetime.now()
 
@@ -127,7 +127,7 @@ def _process_update(update: dict) -> None:
 
     # Security: ignore if allowlist is set and this chat isn't in it
     if _ALLOWED and chat_id not in _ALLOWED:
-        send(chat_id, "Μη εξουσιοδοτημένος χρήστης. Πρόσθεσε το chat ID σου στο JARVIS_ALLOWED_CHAT_IDS στο .env")
+        send(chat_id, "Μη εξουσιοδοτημένος χρήστης. Πρόσθεσε το chat ID σου στο NOVA_ALLOWED_CHAT_IDS στο .env")
         return
 
     # --- Slash commands ---
@@ -136,7 +136,7 @@ def _process_update(update: dict) -> None:
         hrs, rem = divmod(int(uptime.total_seconds()), 3600)
         mins = rem // 60
         send(chat_id,
-             f"<b>JARVIS online</b> ⚡\n"
+             f"<b>NOVA online</b> ⚡\n"
              f"Uptime: {hrs}ω {mins}λ\n\n"
              f"Στείλε οποιαδήποτε εντολή ή:\n"
              f"/help  /status  /balance  /lock\n"
@@ -145,7 +145,7 @@ def _process_update(update: dict) -> None:
 
     if text.startswith("/help"):
         send(chat_id,
-             "<b>Εντολές Jarvis</b>\n\n"
+             "<b>Εντολές Nova</b>\n\n"
              "<b>Slash:</b>\n"
              "/status — κατάσταση συστήματος\n"
              "/balance — σύνοψη budget\n"
@@ -165,7 +165,7 @@ def _process_update(update: dict) -> None:
         hrs, rem = divmod(int(uptime.total_seconds()), 3600)
         mins = rem // 60
         send(chat_id,
-             f"✅ Jarvis online\n"
+             f"✅ Nova online\n"
              f"Uptime: {hrs}ω {mins}λ\n"
              f"Wake word: openWakeWord (hey_jarvis)\n"
              f"STT: faster-whisper (base)\n"
@@ -199,7 +199,7 @@ def _process_update(update: dict) -> None:
     # --- Free-text intent routing ---
     reply = _handle_text(text)
     if _broadcast:
-        _broadcast({"type": "jarvis_state", "payload": "idle", "text": reply, "heard": f"[Telegram] {text}"})
+        _broadcast({"type": "nova_state", "payload": "idle", "text": reply, "heard": f"[Telegram] {text}"})
     send(chat_id, reply)
 
 
@@ -223,14 +223,14 @@ def _poll_loop(token: str) -> None:
 
 def start_bot() -> None:
     """Start the Telegram polling loop in a daemon thread. No-op if token is missing."""
-    token = os.getenv("JARVIS_BOT_TOKEN", "").strip()
+    token = os.getenv("NOVA_BOT_TOKEN", "").strip()
     if not token:
-        print("[Telegram] JARVIS_BOT_TOKEN not set — Telegram bot disabled.")
+        print("[Telegram] NOVA_BOT_TOKEN not set — Telegram bot disabled.")
         return
 
     global BOT_TOKEN
     BOT_TOKEN = token
 
-    thread = threading.Thread(target=_poll_loop, args=(token,), daemon=True, name="jarvis-telegram")
+    thread = threading.Thread(target=_poll_loop, args=(token,), daemon=True, name="nova-telegram")
     thread.start()
     print(f"[Telegram] Bot started. Allowed chats: {_ALLOWED or 'all (no allowlist)'}")

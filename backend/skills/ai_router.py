@@ -20,9 +20,9 @@ def reset_history():
     _history.clear()
 
 
-def add_to_history(user_text: str, jarvis_response: str):
+def add_to_history(user_text: str, nova_response: str):
     _history.append({"role": "user",      "content": user_text})
-    _history.append({"role": "assistant", "content": jarvis_response})
+    _history.append({"role": "assistant", "content": nova_response})
 
 
 def route(text: str, active_user: str = "owner") -> dict:
@@ -74,7 +74,7 @@ def _build_system(today: date, tomorrow: date, active_user: str) -> str:
     utc_offset = -(_time.timezone if not _time.daylight else _time.altzone) // 3600
     offset_str = f"UTC+{utc_offset}" if utc_offset >= 0 else f"UTC{utc_offset}"
 
-    return f"""Είσαι ο Jarvis, AI βοηθός των Mario (owner) και Andriana.
+    return f"""Είσαι η Nova, AI βοηθός των Mario (owner) και Andriana.
 Σήμερα: {today.strftime("%A %d %B %Y")} (ISO: {today.isoformat()})
 Αύριο: {tomorrow.isoformat()}
 Ενεργός χρήστης: {active_user}
