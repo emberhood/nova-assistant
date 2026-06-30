@@ -17,7 +17,6 @@ Output: backend/voice/wakewords/hey_nova.onnx  (~50 KB)
 Total time: ~20-40 minutes on CPU
 """
 
-import io
 import logging
 import os
 import random
@@ -42,9 +41,15 @@ CLIP_DURATION_S    = 4.0   # seconds per clip — needs ≥16 embedding frames
 OUTPUT_DIR         = Path(__file__).parent / "wakewords"
 OUTPUT_MODEL       = OUTPUT_DIR / "hey_nova.onnx"
 
-# gTTS accent codes for voice variety
-GTTS_LANGS = ["en", "en"]  # repeat en to weight it; also add accents below
-GTTS_TLDS  = ["com", "co.uk", "com.au", "ca", "co.in"]  # US, UK, AU, CA, IN accents
+# espeak-ng voice variants for variety (offline, no rate limits)
+ESPEAK_VOICES = [
+    "en-us", "en-gb", "en-au", "en-sc", "en-029",
+    "en-us+m1", "en-us+m2", "en-us+m3",
+    "en-us+f1", "en-us+f2", "en-us+f3",
+    "en-gb+m1", "en-gb+f1",
+]
+ESPEAK_SPEEDS  = [120, 140, 160, 180, 200]   # words per minute (default 175)
+ESPEAK_PITCHES = [30, 45, 55, 65, 75]         # pitch 0-99 (default 50)
 
 # Negative phrases — things that sound vaguely similar but shouldn't trigger
 NEGATIVE_PHRASES = [
@@ -61,10 +66,10 @@ NEGATIVE_PHRASES = [
 
 # ── Audio helpers ─────────────────────────────────────────────────────────────
 
-def mp3_bytes_to_pcm(mp3_bytes: bytes, target_sr: int = SAMPLE_RATE) -> np.ndarray:
-    """Decode mp3 bytes → numpy int16 array at target_sr."""
+def mp3_bytes_to_pcm(audio_bytes: bytes, target_sr: int = SAMPLE_RATE) -> np.ndarray:
+    """Decode audio bytes (WAV/MP3) → numpy int16 array at target_sr."""
     import miniaudio
-    decoded = miniaudio.decode(mp3_bytes, nchannels=1, sample_rate=target_sr)
+    decoded = miniaudio.decode(audio_bytes, nchannels=1, sample_rate=target_sr)
     return np.frombuffer(decoded.samples, dtype=np.int16)
 
 
@@ -88,31 +93,42 @@ def add_noise(audio: np.ndarray, snr_db: float = 20.0) -> np.ndarray:
     return noisy.astype(np.int16)
 
 
-# ── TTS generation (gTTS — no API key, no rate limits) ───────────────────────
+# ── TTS generation (espeak-ng — offline, no rate limits) ─────────────────────
 
-def _gtts_clip(text: str, tld: str = "com", slow: bool = False) -> bytes:
-    """Return mp3 bytes via gTTS (Google Translate TTS)."""
-    from gtts import gTTS
-    buf = io.BytesIO()
-    gTTS(text, lang="en", tld=tld, slow=slow).write_to_fp(buf)
-    return buf.getvalue()
+def _espeak_clip(text: str, voice: str, speed: int, pitch: int) -> bytes:
+    """Return WAV bytes via espeak-ng subprocess."""
+    import subprocess
+    import tempfile
+    import os
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        out_path = f.name
+    try:
+        subprocess.run(
+            ["espeak-ng", "-v", voice, "-s", str(speed), "-p", str(pitch),
+             "-w", out_path, text],
+            check=True, capture_output=True,
+        )
+        with open(out_path, "rb") as f:
+            return f.read()
+    finally:
+        os.unlink(out_path)
 
 
 def generate_clips(phrases: list[str], n: int, label: str) -> list[np.ndarray]:
-    """Generate n audio clips with varied accents and speeds."""
+    """Generate n audio clips with varied voices/speeds/pitches via espeak-ng."""
     target_len = int(CLIP_DURATION_S * SAMPLE_RATE)
     clips: list[np.ndarray] = []
 
-    log.info(f"Generating {n} {label} clips via gTTS...")
+    log.info(f"Generating {n} {label} clips via espeak-ng...")
     for i in range(n):
         phrase = random.choice(phrases)
-        tld    = random.choice(GTTS_TLDS)
-        slow   = random.random() < 0.25  # 25% slow delivery for variety
+        voice  = random.choice(ESPEAK_VOICES)
+        speed  = random.choice(ESPEAK_SPEEDS)
+        pitch  = random.choice(ESPEAK_PITCHES)
 
         try:
-            mp3_bytes = _gtts_clip(phrase, tld=tld, slow=slow)
-            pcm = mp3_bytes_to_pcm(mp3_bytes)
-            # Tile positive clips so the whole 4s is filled with the phrase
+            wav_bytes = _espeak_clip(phrase, voice, speed, pitch)
+            pcm = mp3_bytes_to_pcm(wav_bytes)
             is_positive = (len(phrases) == 1)
             pcm = pad_or_trim(pcm, target_len, tile=is_positive)
             if random.random() < 0.5:
@@ -120,7 +136,7 @@ def generate_clips(phrases: list[str], n: int, label: str) -> list[np.ndarray]:
                 pcm = add_noise(pcm, snr_db=snr)
             clips.append(pcm)
         except Exception as e:
-            log.warning(f"gTTS error ({phrase!r}): {e} — skipping")
+            log.warning(f"espeak error ({phrase!r}, {voice}): {e} — skipping")
 
         if (i + 1) % 20 == 0:
             log.info(f"  {i+1}/{n} {label} clips done ({len(clips)} valid)")
@@ -162,7 +178,7 @@ def embeddings_to_windows(embeddings: np.ndarray, window: int = 16) -> np.ndarra
 
 
 def make_dataloader(pos_emb: np.ndarray, neg_emb: np.ndarray,
-                    batch_size: int = 64):
+                    batch_size: int = 64, infinite: bool = True):
     X = np.concatenate([pos_emb, neg_emb], axis=0)
     y = np.concatenate([
         np.ones(len(pos_emb), dtype=np.float32),
@@ -173,7 +189,10 @@ def make_dataloader(pos_emb: np.ndarray, neg_emb: np.ndarray,
     ds = TensorDataset(torch.tensor(X), torch.tensor(y))
     dl = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
-    # auto_train iterates until steps exhausted — DataLoader must cycle
+    if not infinite:
+        return dl
+
+    # auto_train iterates until steps exhausted — train/val must cycle infinitely
     def _infinite():
         while True:
             yield from dl
@@ -210,10 +229,11 @@ def main():
     pos_train, pos_val = split(pos_windows)
     neg_train, neg_val = split(neg_windows)
 
-    train_dl = make_dataloader(pos_train, neg_train)
-    val_dl   = make_dataloader(pos_val, neg_val)
-    # false_positive_val_data: DataLoader of purely negative samples (for FP/hr metric)
-    fp_val_dl = make_dataloader(np.zeros((10, 16, 96), dtype=np.float32), neg_val)
+    # Training loader cycles infinitely (auto_train iterates until steps exhausted)
+    train_dl  = make_dataloader(pos_train, neg_train, infinite=True)
+    # Validation loaders must be finite — auto_train iterates them to exhaustion each checkpoint
+    val_dl    = make_dataloader(pos_val, neg_val, infinite=False)
+    fp_val_dl = make_dataloader(np.zeros((10, 16, 96), dtype=np.float32), neg_val, infinite=False)
 
     # ── 3. Train ───────────────────────────────────────────────────────────────
     from openwakeword.train import Model as OWWTrainModel
