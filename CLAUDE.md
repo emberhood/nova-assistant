@@ -61,32 +61,68 @@ sets env vars. Run this once when connecting a new app to Nova.
 
 Prerequisites:
 - App already cloned to `local_path` (add entry to `.claude/projects.json` first)
-- `mcp_url_prod` set in `projects.json` if you want `--render` to work (after first deploy)
+- `mcp_url_prod` set in `projects.json` before running (can be added after first deploy)
 
 Steps:
 1. Read `.claude/projects.json` → get `local_path`, `repo`, `mcp_url_prod`
-2. Sync check: `git -C <local_path> fetch && git -C <local_path> status`
-   — if dirty or behind, warn and ask how to proceed
-3. Detect framework: check `package.json` for `"next"` dep (Next.js) or `requirements.txt` (FastAPI)
+
+2. Sync check:
+   ```bash
+   git -C <local_path> fetch
+   git -C <local_path> status
+   ```
+   If dirty or behind origin, warn and ask how to proceed before continuing.
+
+3. Detect framework: read `<local_path>/package.json` for a `"next"` dependency (Next.js),
+   or check for `requirements.txt` (FastAPI).
+
 4. Scaffold MCP route if it doesn't already exist:
-   - Next.js: copy `backend/scripts/templates/mcp_nextjs.ts` → `<local_path>/app/api/mcp/route.ts`
-   - FastAPI: copy `backend/scripts/templates/mcp_fastapi.py` → `<local_path>/mcp_server.py`
-   - Replace `{{NAME}}` placeholder with the feature name in the file
+   - Next.js: read `backend/scripts/templates/mcp_nextjs.ts`, replace `{{NAME}}` with the
+     feature name, write to `<local_path>/app/api/mcp/route.ts`
+   - FastAPI: read `backend/scripts/templates/mcp_fastapi.py`, replace `{{NAME}}`, write to
+     `<local_path>/mcp_server.py`
+
 5. Write `<local_path>/CLAUDE.md` from `backend/scripts/templates/feature_claude_md.md`
-   — replace `{{NAME}}` and `{{NAME_UPPER}}` — SKIP if CLAUDE.md already has real content
-6. Run: `python3 backend/scripts/connect_feature.py <name>`
-   — generates token, saves to `backend/.env`, prints env vars to set
-7. Set token on feature app deployment:
+   — replace `{{NAME}}` and `{{NAME_UPPER}}`. SKIP if CLAUDE.md already has real content.
+
+6. Generate a token and save it to `backend/.env`:
+   - Check if `NOVA_MCP_<NAME_UPPER>_TOKEN` already exists in `backend/.env` — reuse if so
+   - Otherwise: `TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")`
+   - Use the Edit tool to add `NOVA_MCP_<NAME_UPPER>_TOKEN=<token>` under the MCP section in `.env`
+   - Also add `NOVA_MCP_<NAME_UPPER>_URL=<mcp_url_prod>` if not already present
+
+7. Set token on the feature app:
    - Vercel: `printf '<TOKEN>' | vercel --cwd <local_path> env add NOVA_MCP_TOKEN production`
-   - Other: print the value and instruct user to set it manually
-8. If `mcp_url_prod` is set: run `python3 backend/scripts/connect_feature.py <name> --render`
-   — pushes NOVA_MCP_<NAME>_URL + NOVA_MCP_<NAME>_TOKEN to Render via API
-   — requires RENDER_API_KEY + RENDER_SERVICE_ID in `backend/.env`
-9. Commit and push the feature app's new/changed files (MCP route + CLAUDE.md)
-10. Print checklist:
-    - [ ] Deploy feature app on Vercel/Render so MCP route is live
+   - If Vercel CLI not available: print the value and tell the user to set it in the dashboard
+
+8. Push env vars to Nova's Render backend (requires `RENDER_API_KEY` + `RENDER_SERVICE_ID` in `.env`):
+   ```bash
+   # Read current env vars
+   CURRENT=$(curl -sf -H "Authorization: Bearer $RENDER_API_KEY" \
+     "https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars")
+   # Merge + PUT back using jq (add/replace the two keys for this feature)
+   UPDATED=$(echo "$CURRENT" | jq --arg uk "NOVA_MCP_<NAME_UPPER>_URL" --arg uv "<mcp_url_prod>" \
+     --arg tk "NOVA_MCP_<NAME_UPPER>_TOKEN" --arg tv "<token>" \
+     '[.[] | .envVar] | map(select(.key != $uk and .key != $tk)) + [{key:$uk,value:$uv},{key:$tk,value:$tv}]')
+   curl -sf -X PUT -H "Authorization: Bearer $RENDER_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d "$UPDATED" \
+     "https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars"
+   ```
+   If `RENDER_API_KEY` or `RENDER_SERVICE_ID` are missing from `.env`, print what needs to be set
+   and skip this step — the user can add them and rerun later.
+
+9. Commit and push the feature app's new files (MCP route + CLAUDE.md):
+   ```bash
+   git -C <local_path> add .
+   git -C <local_path> commit -m "Add Nova MCP server"
+   git -C <local_path> push
+   ```
+
+10. Print final checklist:
+    - [ ] Deploy feature app on Vercel/Render so the MCP route is live
     - [ ] Run `/check-services` to verify Nova can reach it
-    - [ ] Restart Nova backend on Render to load new env vars
+    - [ ] Redeploy Nova backend on Render to load the new env vars
 
 ### /check-services
 Ping all MCP endpoints that have a non-null `mcp_url_prod` in `.claude/projects.json`.
@@ -107,7 +143,6 @@ Steps:
 | `backend/skills/budget_skill.py` | Budget SQLite reader (temporary — will become MCP) |
 | `.claude/projects.json` | Feature app registry |
 | `ui/src/lib/store.ts` | Zustand global state + WebSocket listener |
-| `backend/scripts/connect_feature.py` | Token generation + Render API env var push |
 | `backend/scripts/templates/` | MCP boilerplate (Next.js, FastAPI) + CLAUDE.md template |
 
 ## Adding a new tool to Nova's brain
