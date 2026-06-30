@@ -92,3 +92,26 @@ Steps:
 1. Add a tool schema to `TOOLS` list in `backend/skills/nova_brain.py`
 2. Add a `case "tool_name":` handler in `_execute_tool()`
 3. No changes needed anywhere else — Claude will start using the tool automatically
+
+## Working on feature projects (vromomarket, budget, etc.)
+
+Each feature app lives in `/home/kontis/Projects/<name>/` and has its own CLAUDE.md explaining
+the MCP contract. Claude has full read/write/bash access to the entire `/home/kontis/Projects/`
+tree without per-command approval (set in `.claude/settings.local.json`).
+
+**Pattern for feature work:**
+- Small changes (add a tool, fix a bug): work directly in the feature's directory
+- Larger refactors or exploration: spawn a subagent scoped to that project
+
+```
+Agent({
+  description: "vromomarket feature work",
+  prompt: "Working in /home/kontis/Projects/vromomarket. Read CLAUDE.md first for MCP context. Task: <description>"
+})
+```
+
+**When a new feature is connected to Nova:**
+1. Run `/scaffold-mcp <name>` to generate the MCP boilerplate
+2. Update `.claude/projects.json` with its paths and prod URL
+3. Its CLAUDE.md is created by `/scaffold-mcp` — edit it to describe the app's DB schema and tools
+4. Render env: add `NOVA_MCP_<NAME>_URL` + `NOVA_MCP_<NAME>_TOKEN`
