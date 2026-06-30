@@ -1,0 +1,15 @@
+# Local voice pipeline — only needed when LOCAL_VOICE=true (your laptop)
+# Install with: pip install -r requirements.txt -r requirements-local.txt
+-r requirements.txt
+
+pvporcupine            # wake word "Arthur" (primary)
+openwakeword==0.6.0    # hey_jarvis fallback
+faster-whisper==1.0.3  # local STT fallback
+groq                   # cloud STT — Whisper large-v3
+edge-tts==6.1.12       # Greek TTS
+gTTS                   # Google TTS fallback
+miniaudio              # mp3 decode → PCM
+sounddevice==0.4.7     # audio record + playback
+numpy==1.26.4
+scipy==1.13.1
+resemblyzer==0.1.4     # speaker verification
