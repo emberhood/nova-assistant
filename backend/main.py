@@ -18,7 +18,7 @@ _ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:4173",
     "https://nova-backend-bmsm.onrender.com",
-    # Vercel frontend URL goes here once deployed
+    "https://nova-assistant-navy.vercel.app",
 ]
 
 app.add_middleware(
