@@ -9,6 +9,14 @@ torchinfo
 torchmetrics
 tqdm
 pyyaml
+pronouncing
+audiomentations
+torch-audiomentations
+speechbrain
+torchaudio
+mutagen
+acoustics
+onnxscript
 faster-whisper==1.0.3  # local STT fallback
 groq                   # cloud STT — Whisper large-v3
 edge-tts==6.1.12       # Greek TTS

@@ -17,12 +17,11 @@ Output: backend/voice/wakewords/hey_nova.onnx  (~50 KB)
 Total time: ~20-40 minutes on CPU
 """
 
-import asyncio
+import io
 import logging
 import os
 import random
 import sys
-import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -35,27 +34,17 @@ log = logging.getLogger(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 
 WAKEWORD_PHRASE    = "hey nova"
-N_POSITIVE         = 500   # synthetic "hey nova" clips
-N_NEGATIVE         = 500   # synthetic "other phrase" clips
+N_POSITIVE         = 300   # synthetic "hey nova" clips
+N_NEGATIVE         = 300   # synthetic "other phrase" clips
 TRAIN_STEPS        = 10000 # reduce to 5000 for a quick test
 SAMPLE_RATE        = 16000
-CLIP_DURATION_S    = 1.5   # seconds per clip — long enough to say "hey nova"
+CLIP_DURATION_S    = 4.0   # seconds per clip — needs ≥16 embedding frames
 OUTPUT_DIR         = Path(__file__).parent / "wakewords"
 OUTPUT_MODEL       = OUTPUT_DIR / "hey_nova.onnx"
 
-# English TTS voices — variety improves robustness
-POSITIVE_VOICES = [
-    "en-US-ChristopherNeural",
-    "en-US-EricNeural",
-    "en-US-GuyNeural",
-    "en-US-JennyNeural",
-    "en-US-AriaNeural",
-    "en-GB-RyanNeural",
-    "en-GB-SoniaNeural",
-    "en-AU-WilliamNeural",
-    "en-CA-LiamNeural",
-    "en-IE-ConnorNeural",
-]
+# gTTS accent codes for voice variety
+GTTS_LANGS = ["en", "en"]  # repeat en to weight it; also add accents below
+GTTS_TLDS  = ["com", "co.uk", "com.au", "ca", "co.in"]  # US, UK, AU, CA, IN accents
 
 # Negative phrases — things that sound vaguely similar but shouldn't trigger
 NEGATIVE_PHRASES = [
@@ -69,16 +58,6 @@ NEGATIVE_PHRASES = [
     "grey nova", "hey local", "he nova", "hay nova",
 ]
 
-NEGATIVE_VOICES = [
-    "en-US-ChristopherNeural",
-    "en-US-JennyNeural",
-    "en-GB-RyanNeural",
-    "en-AU-WilliamNeural",
-]
-
-# Speech rates for variation (normal is +0%)
-RATES = ["-15%", "-5%", "+0%", "+5%", "+15%", "+25%"]
-
 
 # ── Audio helpers ─────────────────────────────────────────────────────────────
 
@@ -89,9 +68,13 @@ def mp3_bytes_to_pcm(mp3_bytes: bytes, target_sr: int = SAMPLE_RATE) -> np.ndarr
     return np.frombuffer(decoded.samples, dtype=np.int16)
 
 
-def pad_or_trim(audio: np.ndarray, length: int) -> np.ndarray:
-    """Pad with zeros or trim to exactly `length` samples."""
+def pad_or_trim(audio: np.ndarray, length: int, tile: bool = False) -> np.ndarray:
+    """Pad/tile or trim to exactly `length` samples."""
     if len(audio) >= length:
+        return audio[:length]
+    if tile and len(audio) > 0:
+        repeats = (length // len(audio)) + 1
+        audio = np.tile(audio, repeats)
         return audio[:length]
     return np.pad(audio, (0, length - len(audio)))
 
@@ -105,55 +88,42 @@ def add_noise(audio: np.ndarray, snr_db: float = 20.0) -> np.ndarray:
     return noisy.astype(np.int16)
 
 
-# ── TTS generation ────────────────────────────────────────────────────────────
+# ── TTS generation (gTTS — no API key, no rate limits) ───────────────────────
 
-async def _tts_clip(text: str, voice: str, rate: str) -> bytes:
-    """Return raw mp3 bytes from edge-tts."""
-    import edge_tts
-    mp3_chunks = []
-    communicate = edge_tts.Communicate(text, voice, rate=rate)
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            mp3_chunks.append(chunk["data"])
-    return b"".join(mp3_chunks)
+def _gtts_clip(text: str, tld: str = "com", slow: bool = False) -> bytes:
+    """Return mp3 bytes via gTTS (Google Translate TTS)."""
+    from gtts import gTTS
+    buf = io.BytesIO()
+    gTTS(text, lang="en", tld=tld, slow=slow).write_to_fp(buf)
+    return buf.getvalue()
 
 
-async def generate_clips(phrases: list[str], voices: list[str], n: int,
-                          label: str) -> list[np.ndarray]:
-    """Generate n audio clips by cycling through phrases/voices/rates."""
+def generate_clips(phrases: list[str], n: int, label: str) -> list[np.ndarray]:
+    """Generate n audio clips with varied accents and speeds."""
     target_len = int(CLIP_DURATION_S * SAMPLE_RATE)
     clips: list[np.ndarray] = []
 
-    log.info(f"Generating {n} {label} clips via edge-tts...")
-    tasks_meta = [
-        (random.choice(phrases), random.choice(voices), random.choice(RATES))
-        for _ in range(n)
-    ]
+    log.info(f"Generating {n} {label} clips via gTTS...")
+    for i in range(n):
+        phrase = random.choice(phrases)
+        tld    = random.choice(GTTS_TLDS)
+        slow   = random.random() < 0.25  # 25% slow delivery for variety
 
-    # Generate in small concurrent batches to avoid rate-limiting
-    BATCH = 20
-    for i in range(0, n, BATCH):
-        batch = tasks_meta[i:i+BATCH]
-        tasks = [_tts_clip(p, v, r) for p, v, r in batch]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            mp3_bytes = _gtts_clip(phrase, tld=tld, slow=slow)
+            pcm = mp3_bytes_to_pcm(mp3_bytes)
+            # Tile positive clips so the whole 4s is filled with the phrase
+            is_positive = (len(phrases) == 1)
+            pcm = pad_or_trim(pcm, target_len, tile=is_positive)
+            if random.random() < 0.5:
+                snr = random.uniform(15, 40)
+                pcm = add_noise(pcm, snr_db=snr)
+            clips.append(pcm)
+        except Exception as e:
+            log.warning(f"gTTS error ({phrase!r}): {e} — skipping")
 
-        for j, (mp3_or_exc, (phrase, voice, rate)) in enumerate(zip(results, batch)):
-            if isinstance(mp3_or_exc, Exception):
-                log.warning(f"TTS error ({phrase!r}, {voice}, {rate}): {mp3_or_exc} — skipping")
-                continue
-            try:
-                pcm = mp3_bytes_to_pcm(mp3_or_exc)
-                pcm = pad_or_trim(pcm, target_len)
-                # Augment: add light noise to ~half the clips
-                if random.random() < 0.5:
-                    snr = random.uniform(15, 40)
-                    pcm = add_noise(pcm, snr_db=snr)
-                clips.append(pcm)
-            except Exception as e:
-                log.warning(f"Decode error: {e} — skipping")
-
-        done = min(i + BATCH, n)
-        log.info(f"  {done}/{n} {label} clips done")
+        if (i + 1) % 20 == 0:
+            log.info(f"  {i+1}/{n} {label} clips done ({len(clips)} valid)")
 
     log.info(f"Generated {len(clips)} valid {label} clips")
     return clips
@@ -171,8 +141,8 @@ def extract_embeddings(clips: list[np.ndarray]) -> np.ndarray:
     log.info(f"Extracting embeddings for {len(clips)} clips...")
     af = AudioFeatures(device="cpu")
 
-    # embed_clips expects (N, samples) float32 normalised to [-1, 1]
-    arr = np.stack(clips).astype(np.float32) / 32768.0
+    # embed_clips expects (N, samples) int16
+    arr = np.stack(clips).astype(np.int16)
     embeddings = af.embed_clips(arr)   # (N, frames, 96)
     log.info(f"  Embedding shape: {embeddings.shape}")
     return embeddings
@@ -192,7 +162,7 @@ def embeddings_to_windows(embeddings: np.ndarray, window: int = 16) -> np.ndarra
 
 
 def make_dataloader(pos_emb: np.ndarray, neg_emb: np.ndarray,
-                    batch_size: int = 64) -> DataLoader:
+                    batch_size: int = 64):
     X = np.concatenate([pos_emb, neg_emb], axis=0)
     y = np.concatenate([
         np.ones(len(pos_emb), dtype=np.float32),
@@ -201,30 +171,27 @@ def make_dataloader(pos_emb: np.ndarray, neg_emb: np.ndarray,
     idx = np.random.permutation(len(X))
     X, y = X[idx], y[idx]
     ds = TensorDataset(torch.tensor(X), torch.tensor(y))
-    return DataLoader(ds, batch_size=batch_size, shuffle=True)
+    dl = DataLoader(ds, batch_size=batch_size, shuffle=True)
+
+    # auto_train iterates until steps exhausted — DataLoader must cycle
+    def _infinite():
+        while True:
+            yield from dl
+
+    return _infinite()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-async def main():
+def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── 1. Generate audio ──────────────────────────────────────────────────────
-    pos_clips = await generate_clips(
-        phrases=[WAKEWORD_PHRASE],
-        voices=POSITIVE_VOICES,
-        n=N_POSITIVE,
-        label="positive",
-    )
-    neg_clips = await generate_clips(
-        phrases=NEGATIVE_PHRASES,
-        voices=NEGATIVE_VOICES,
-        n=N_NEGATIVE,
-        label="negative",
-    )
+    pos_clips = generate_clips(phrases=[WAKEWORD_PHRASE], n=N_POSITIVE, label="positive")
+    neg_clips = generate_clips(phrases=NEGATIVE_PHRASES, n=N_NEGATIVE, label="negative")
 
     if len(pos_clips) < 50:
-        log.error("Not enough positive clips generated. Check edge-tts connectivity.")
+        log.error("Not enough positive clips generated.")
         sys.exit(1)
 
     # ── 2. Extract embeddings ──────────────────────────────────────────────────
@@ -267,4 +234,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
