@@ -55,17 +55,38 @@ Steps:
 2. For each project, run `git -C <local_path> status --short` and `git -C <local_path> log -1 --format="%h %s"`
 3. Print a summary table
 
-### /scaffold-mcp <name>
-Generate the MCP server boilerplate for an existing app so it can be registered with Nova.
+### /connect-feature <name>
+Full onboarding flow for a new feature app — scaffolds MCP, writes CLAUDE.md, generates token,
+sets env vars. Run this once when connecting a new app to Nova.
+
+Prerequisites:
+- App already cloned to `local_path` (add entry to `.claude/projects.json` first)
+- `mcp_url_prod` set in `projects.json` if you want `--render` to work (after first deploy)
 
 Steps:
-1. Read `.claude/projects.json` to find the project path
-2. Determine the app's framework (Next.js / FastAPI / other) by reading its package.json or requirements
-3. Create `<local_path>/app/mcp/route.ts` (Next.js) or `<local_path>/mcp_server.py` (FastAPI)
-   with: tool listing endpoint, tool call endpoint, auth header check (X-Nova-Token)
-4. Add a placeholder tool definition based on the app's name
-5. Update `.claude/projects.json` with the local MCP URL
-6. Print next steps: deploy the app, add prod URL, register with Nova
+1. Read `.claude/projects.json` → get `local_path`, `repo`, `mcp_url_prod`
+2. Sync check: `git -C <local_path> fetch && git -C <local_path> status`
+   — if dirty or behind, warn and ask how to proceed
+3. Detect framework: check `package.json` for `"next"` dep (Next.js) or `requirements.txt` (FastAPI)
+4. Scaffold MCP route if it doesn't already exist:
+   - Next.js: copy `backend/scripts/templates/mcp_nextjs.ts` → `<local_path>/app/api/mcp/route.ts`
+   - FastAPI: copy `backend/scripts/templates/mcp_fastapi.py` → `<local_path>/mcp_server.py`
+   - Replace `{{NAME}}` placeholder with the feature name in the file
+5. Write `<local_path>/CLAUDE.md` from `backend/scripts/templates/feature_claude_md.md`
+   — replace `{{NAME}}` and `{{NAME_UPPER}}` — SKIP if CLAUDE.md already has real content
+6. Run: `python3 backend/scripts/connect_feature.py <name>`
+   — generates token, saves to `backend/.env`, prints env vars to set
+7. Set token on feature app deployment:
+   - Vercel: `printf '<TOKEN>' | vercel --cwd <local_path> env add NOVA_MCP_TOKEN production`
+   - Other: print the value and instruct user to set it manually
+8. If `mcp_url_prod` is set: run `python3 backend/scripts/connect_feature.py <name> --render`
+   — pushes NOVA_MCP_<NAME>_URL + NOVA_MCP_<NAME>_TOKEN to Render via API
+   — requires RENDER_API_KEY + RENDER_SERVICE_ID in `backend/.env`
+9. Commit and push the feature app's new/changed files (MCP route + CLAUDE.md)
+10. Print checklist:
+    - [ ] Deploy feature app on Vercel/Render so MCP route is live
+    - [ ] Run `/check-services` to verify Nova can reach it
+    - [ ] Restart Nova backend on Render to load new env vars
 
 ### /check-services
 Ping all MCP endpoints that have a non-null `mcp_url_prod` in `.claude/projects.json`.
@@ -86,6 +107,8 @@ Steps:
 | `backend/skills/budget_skill.py` | Budget SQLite reader (temporary — will become MCP) |
 | `.claude/projects.json` | Feature app registry |
 | `ui/src/lib/store.ts` | Zustand global state + WebSocket listener |
+| `backend/scripts/connect_feature.py` | Token generation + Render API env var push |
+| `backend/scripts/templates/` | MCP boilerplate (Next.js, FastAPI) + CLAUDE.md template |
 
 ## Adding a new tool to Nova's brain
 
@@ -111,7 +134,14 @@ Agent({
 ```
 
 **When a new feature is connected to Nova:**
-1. Run `/scaffold-mcp <name>` to generate the MCP boilerplate
-2. Update `.claude/projects.json` with its paths and prod URL
-3. Its CLAUDE.md is created by `/scaffold-mcp` — edit it to describe the app's DB schema and tools
-4. Render env: add `NOVA_MCP_<NAME>_URL` + `NOVA_MCP_<NAME>_TOKEN`
+1. Add entry to `.claude/projects.json` with `local_path`, `repo`, `status: "active"`
+2. Run `/connect-feature <name>` — handles scaffolding, token generation, and env vars
+3. After first deploy: set `mcp_url_prod` in `projects.json`, then rerun `python3 backend/scripts/connect_feature.py <name> --render`
+4. Run `/check-services` to verify the connection
+
+**One-time Render setup** (needed for `--render` flag to work):
+Add to `backend/.env`:
+```
+RENDER_API_KEY=rnd_xxxx        # Render → Account → API Keys
+RENDER_SERVICE_ID=srv-xxxx     # Render → nova-backend → Settings → Service ID
+```
