@@ -1,11 +1,10 @@
 """
 Nova voice pipeline orchestrator.
-Wake word → Record → STT → AI Router → Execute Actions → TTS
+Wake word → Record → STT → Nova Brain (Claude) → TTS
 
 Architecture:
-- Groq decides WHAT to do (structured JSON actions + natural response)
-- Pipeline executes the actions and speaks the response
-- Conversation history in ai_router gives context across turns
+- Claude API decides WHAT to do via native tool_use
+- nova_brain runs the agent loop and returns a final Greek response
 - _pipeline_lock prevents concurrent runs (echo suppression)
 """
 
@@ -18,7 +17,7 @@ from voice.recorder import record_until_silence
 from voice.stt import transcribe
 from voice.tts import speak
 from voice import speaker_verify
-from skills import ai_router, pc_control, budget_skill, calendar_skill
+from skills import nova_brain
 
 _broadcast: Callable | None = None
 _pipeline_lock = threading.Lock()
@@ -29,6 +28,7 @@ _active_user = "owner"   # tracked so router knows who's speaking
 def set_broadcast(fn: Callable):
     global _broadcast
     _broadcast = fn
+    nova_brain.set_broadcast(fn)
 
 
 def is_busy() -> bool:
@@ -171,30 +171,11 @@ def _run_pipeline():
 
         print(f"[Pipeline] Heard: '{text}'")
 
-        # AI Router — returns {actions, response}
-        result = ai_router.route(text, active_user=speaker_user)
-        actions  = result.get("actions", [])
-        response = result.get("response", "")
-
-        print(f"[Pipeline] Actions: {actions}")
-
-        # Execute actions — data actions override/replace the response
-        data_parts = []
-        for action in actions:
-            data = _execute_action(action, speaker_user)
-            if data:
-                data_parts.append(data)
-
-        # If data was fetched (events, balance, time), speak that instead of router response
-        final_response = "\n".join(data_parts) if data_parts else response
-        if not final_response:
-            final_response = "Εντάξει."
+        # Nova Brain — Claude agent loop, returns final Greek response
+        final_response = nova_brain.route(text, active_user=speaker_user)
 
         _notify("speaking", {"text": final_response, "heard": text})
         _speak_and_wait(final_response)
-
-        # Save turn to history for context in next turn
-        ai_router.add_to_history(text, final_response)
 
     finally:
         _is_busy = False

@@ -1,0 +1,14 @@
+{
+  "vromomarket": {
+    "local_path": "/home/kontis/Projects/vromomarket",
+    "repo": "git@github.com:emberhood/vromomarket.git",
+    "mcp_url_prod": null,
+    "status": "active"
+  },
+  "budget": {
+    "local_path": "/home/kontis/Projects/budget",
+    "repo": null,
+    "mcp_url_prod": null,
+    "status": "not_started"
+  }
+}
