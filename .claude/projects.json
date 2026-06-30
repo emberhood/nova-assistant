@@ -2,7 +2,7 @@
   "vromomarket": {
     "local_path": "/home/kontis/Projects/vromomarket",
     "repo": "git@github.com:emberhood/vromomarket.git",
-    "mcp_url_prod": null,
+    "mcp_url_prod": "https://vromomarket.vercel.app",
     "status": "active"
   },
   "budget": {

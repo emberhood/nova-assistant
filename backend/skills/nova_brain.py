@@ -246,7 +246,29 @@ def _execute_tool(name: str, inputs: dict, active_user: str) -> tuple[str, dict 
                     pc_control.lock_pc()
                     return "Κλείδωσα τον υπολογιστή.", None
 
-    return f"Άγνωστο tool: {name}", None
+        case _:
+            # External MCP tool (namespaced: service__tool_name)
+            if "__" in name:
+                import service_registry
+                result = service_registry.call_external_tool(name, inputs)
+                return result, None
+            return f"Άγνωστο tool: {name}", None
+
+    return "Εντάξει.", None
+
+
+def _build_tools() -> list[dict]:
+    """Native tools + dynamically loaded external MCP tools."""
+    all_tools = list(TOOLS)
+    try:
+        import service_registry
+        external = service_registry.get_all_external_tools()
+        all_tools.extend(external)
+        if external:
+            print(f"[Brain] +{len(external)} external tools from MCP services")
+    except Exception as e:
+        print(f"[Brain] MCP tool load error: {e}")
+    return all_tools
 
 
 def route(text: str, active_user: str = "owner") -> str:
@@ -259,6 +281,7 @@ def route(text: str, active_user: str = "owner") -> str:
     client  = _get_client()
     model   = _pick_model(text)
     system  = _build_system(active_user)
+    tools   = _build_tools()
 
     messages = list(_history)
     messages.append({"role": "user", "content": text})
@@ -271,7 +294,7 @@ def route(text: str, active_user: str = "owner") -> str:
                 model=model,
                 max_tokens=1024,
                 system=system,
-                tools=TOOLS,
+                tools=tools,
                 messages=messages,
             )
         except Exception as e:
