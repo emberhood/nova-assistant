@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
 import os
@@ -55,11 +55,30 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             msg = json.loads(data)
-            # manual trigger from UI (for testing without mic)
+
             if msg.get("type") == "trigger":
+                # manual voice trigger (local mic, testing only)
                 from voice import pipeline as vp
                 import threading
                 threading.Thread(target=vp._on_wake_word, daemon=True).start()
+
+            elif msg.get("type") == "chat":
+                # text command from UI → nova brain → response back over WS
+                text = msg.get("text", "").strip()
+                user = msg.get("user", "owner")
+                if text:
+                    loop = asyncio.get_event_loop()
+                    from skills import nova_brain
+                    nova_brain.set_broadcast(broadcast_sync)
+                    response = await loop.run_in_executor(
+                        None, lambda: nova_brain.route(text, active_user=user)
+                    )
+                    await websocket.send_text(json.dumps({
+                        "type": "nova_response",
+                        "text": response,
+                        "user": user,
+                    }))
+
     except WebSocketDisconnect:
         if websocket in connected_clients:
             connected_clients.remove(websocket)
@@ -110,6 +129,24 @@ async def shutdown():
 @app.get("/api/status")
 def status():
     return {"status": "online", "timestamp": datetime.now().isoformat()}
+
+
+# ── Chat (text → Nova brain → response) ───────────────────────────────────────
+
+@app.post("/api/chat")
+async def chat(request: Request):
+    body = await request.json()
+    text = body.get("text", "").strip()
+    user = body.get("user", "owner")
+    if not text:
+        return {"error": "text is required"}
+    from skills import nova_brain
+    nova_brain.set_broadcast(broadcast_sync)
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None, lambda: nova_brain.route(text, active_user=user)
+    )
+    return {"response": response, "user": user}
 
 
 # ── Calendar ───────────────────────────────────────────────────────────────────
