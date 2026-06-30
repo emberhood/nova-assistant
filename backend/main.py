@@ -68,15 +68,20 @@ async def startup():
     global _loop, _pipeline
     _loop = asyncio.get_running_loop()
 
-    try:
-        from voice import pipeline as vp
-        vp.set_broadcast(broadcast_sync)
-        _pipeline = vp.NovaPipeline()
-        _pipeline.start()
-    except ImportError as e:
-        print(f"[Startup] Voice pipeline deps not installed yet: {e}")
-    except Exception as e:
-        print(f"[Startup] Voice pipeline error: {e}")
+    # Local voice pipeline (wake word + mic) only runs when LOCAL_VOICE=true.
+    # On Railway/cloud the browser sends audio via WebSocket instead (Phase 5).
+    if os.getenv("LOCAL_VOICE", "").lower() == "true":
+        try:
+            from voice import pipeline as vp
+            vp.set_broadcast(broadcast_sync)
+            _pipeline = vp.NovaPipeline()
+            _pipeline.start()
+        except ImportError as e:
+            print(f"[Startup] Voice pipeline deps not installed yet: {e}")
+        except Exception as e:
+            print(f"[Startup] Voice pipeline error: {e}")
+    else:
+        print("[Startup] Local voice pipeline disabled (set LOCAL_VOICE=true to enable)")
 
     try:
         from skills import telegram_skill
