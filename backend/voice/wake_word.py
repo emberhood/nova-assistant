@@ -1,52 +1,32 @@
 """
 Wake-word listener.
 
-Primary:  Picovoice Porcupine with a custom "Arthur" keyword (.ppn).
-Fallback: openWakeWord built-in "hey_jarvis" (used until the Porcupine
-          key + keyword file are configured, so the app never breaks).
+Priority order:
+  1. Custom "Hey Nova" openWakeWord model  — backend/voice/wakewords/hey_nova.onnx
+     Train it once with:  python3 voice/train_hey_nova.py
+  2. Built-in "hey_jarvis" fallback        — works out of the box, say "Hey Jarvis"
 
-Setup for Porcupine (one-time):
-  1. Create a free account at https://console.picovoice.ai
-  2. Copy your AccessKey → add to .env:   PICOVOICE_ACCESS_KEY=xxxxxxxx
-  3. In the console: "Porcupine" → create wake word "Arthur" (or "Hey Arthur")
-     → pick your platform (Windows now / Linux for the final box) → download the .ppn
-  4. Drop the file in:  backend/voice/wakewords/arthur_<platform>.ppn
-     (or set WAKEWORD_PPN_PATH in .env to its absolute path)
-
-NOTE: Porcupine .ppn keyword files are PLATFORM-SPECIFIC. Generate a Windows
-file for testing now and a Linux file for the migrated machine.
+To train "Hey Nova" (one-time, ~30 min):
+    cd backend && source .venv/bin/activate
+    python3 voice/train_hey_nova.py
 """
 
 import os
-import sys
 import threading
 import numpy as np
 import sounddevice as sd
 
-# Tunables
-PORCUPINE_SENSITIVITY = float(os.environ.get("WAKEWORD_SENSITIVITY", "0.6"))  # 0–1
-COOLDOWN_SEC = 3.0
-OWW_THRESHOLD = 0.7          # fallback path only
+COOLDOWN_SEC    = 3.0
+OWW_THRESHOLD   = 0.5   # lower = more sensitive; raise if too many false positives
 OWW_SAMPLE_RATE = 16000
-OWW_CHUNK = 1280
+OWW_CHUNK       = 1280
 
 
-def _default_ppn_path() -> str | None:
-    """Look for a platform-appropriate Arthur keyword file."""
-    explicit = os.environ.get("WAKEWORD_PPN_PATH", "").strip()
-    if explicit and os.path.exists(explicit):
-        return explicit
-
+def _hey_nova_model_path() -> str | None:
+    """Return path to trained hey_nova.onnx if it exists."""
     here = os.path.dirname(os.path.abspath(__file__))
-    plat = "windows" if sys.platform == "win32" else ("linux" if sys.platform.startswith("linux") else "mac")
-    candidates = [
-        os.path.join(here, "wakewords", f"arthur_{plat}.ppn"),
-        os.path.join(here, "wakewords", "arthur.ppn"),
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return None
+    path = os.path.join(here, "wakewords", "hey_nova.onnx")
+    return path if os.path.exists(path) else None
 
 
 class WakeWordListener:
@@ -66,85 +46,47 @@ class WakeWordListener:
 
     # ── Loop dispatcher ──────────────────────────────────────────────────────
     def _listen_loop(self):
-        access_key = os.environ.get("PICOVOICE_ACCESS_KEY", "").strip()
-        ppn_path = _default_ppn_path()
-
-        if access_key and ppn_path:
-            try:
-                self._porcupine_loop(access_key, ppn_path)
-                return
-            except Exception as e:
-                print(f"[WakeWord] Porcupine failed ({e}) — falling back to hey_jarvis.")
+        nova_path = _hey_nova_model_path()
+        if nova_path:
+            print(f"[WakeWord] Loading custom 'Hey Nova' model: {nova_path}")
+            self._openwakeword_loop(model_path=nova_path, wake_phrase="hey_nova")
         else:
-            missing = []
-            if not access_key:
-                missing.append("PICOVOICE_ACCESS_KEY")
-            if not ppn_path:
-                missing.append("Arthur .ppn file")
-            print(f"[WakeWord] Porcupine not configured (missing: {', '.join(missing)}) — using hey_jarvis fallback.")
+            print("[WakeWord] hey_nova.onnx not found — using 'Hey Jarvis' fallback.")
+            print("[WakeWord] Train 'Hey Nova' with: python3 voice/train_hey_nova.py")
+            self._openwakeword_loop(model_path=None, wake_phrase="hey_jarvis")
 
-        self._openwakeword_loop()
-
-    # ── Primary: Porcupine "Arthur" ──────────────────────────────────────────
-    def _porcupine_loop(self, access_key: str, ppn_path: str):
-        import pvporcupine
-
-        porcupine = pvporcupine.create(
-            access_key=access_key,
-            keyword_paths=[ppn_path],
-            sensitivities=[PORCUPINE_SENSITIVITY],
-        )
-        frame_len = porcupine.frame_length          # 512
-        sample_rate = porcupine.sample_rate          # 16000
-        print(f"[WakeWord] Porcupine loaded — say 'Arthur'. ({os.path.basename(ppn_path)})")
-
-        try:
-            with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16",
-                                blocksize=frame_len) as stream:
-                while self._running:
-                    pcm, _ = stream.read(frame_len)
-                    frame = pcm.flatten().astype(np.int16)
-                    result = porcupine.process(frame)
-                    if result >= 0:
-                        if self._is_busy():
-                            self._drain(stream, frame_len, sample_rate, 1.0)
-                            continue
-                        print("[WakeWord] 'Arthur' detected!")
-                        self._on_detected()
-                        self._drain(stream, frame_len, sample_rate, COOLDOWN_SEC)
-        finally:
-            porcupine.delete()
-
-    @staticmethod
-    def _drain(stream, frame_len, sample_rate, seconds):
-        for _ in range(int(seconds * sample_rate / frame_len)):
-            stream.read(frame_len)
-
-    # ── Fallback: openWakeWord "hey_jarvis" ──────────────────────────────────
-    def _openwakeword_loop(self):
+    # ── openWakeWord loop (Hey Nova or Hey Jarvis fallback) ──────────────────
+    def _openwakeword_loop(self, model_path: str | None, wake_phrase: str):
         try:
             from openwakeword.model import Model
         except ImportError:
             print("[WakeWord] openwakeword not installed — wake word disabled.")
             return
+
         try:
-            model = Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
+            if model_path:
+                model = Model(wakeword_models=[model_path], inference_framework="onnx")
+            else:
+                model = Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
         except Exception as e:
-            print(f"[WakeWord] Fallback model failed to load: {e}")
+            print(f"[WakeWord] Model failed to load: {e}")
             return
 
-        print("[WakeWord] Fallback active — say 'Hey Jarvis'.")
+        label = "Hey Nova" if wake_phrase == "hey_nova" else "Hey Jarvis"
+        print(f"[WakeWord] Listening — say '{label}'.")
+
         with sd.InputStream(samplerate=OWW_SAMPLE_RATE, channels=1, dtype="int16",
                             blocksize=OWW_CHUNK) as stream:
             while self._running:
                 pcm, _ = stream.read(OWW_CHUNK)
-                score = model.predict(pcm.flatten().astype(np.int16)).get("hey_jarvis", 0.0)
+                scores = model.predict(pcm.flatten().astype(np.int16))
+                score = scores.get(wake_phrase, 0.0)
                 if score >= OWW_THRESHOLD:
                     if self._is_busy():
                         for _ in range(int(1.0 * OWW_SAMPLE_RATE / OWW_CHUNK)):
                             stream.read(OWW_CHUNK)
                         continue
-                    print(f"[WakeWord] 'Hey Jarvis' detected! (score={score:.2f})")
+                    print(f"[WakeWord] '{label}' detected! (score={score:.2f})")
                     self._on_detected()
                     for _ in range(int(COOLDOWN_SEC * OWW_SAMPLE_RATE / OWW_CHUNK)):
                         if not self._running:

@@ -62,3 +62,5 @@ desktop.ini
 # ─── Logs ────────────────────────────────────────────────────────────────
 *.log
 logs/
+backend/voice/wakewords/*.onnx
+backend/voice/wakewords/*.ppn

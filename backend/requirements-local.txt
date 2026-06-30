@@ -2,8 +2,13 @@
 # Install with: pip install -r requirements.txt -r requirements-local.txt
 -r requirements.txt
 
-pvporcupine            # wake word "Arthur" (primary)
-openwakeword==0.6.0    # hey_jarvis fallback
+openwakeword==0.6.0    # wake word engine (hey_nova or hey_jarvis fallback)
+
+# Wake word training deps (only needed to run train_hey_nova.py)
+torchinfo
+torchmetrics
+tqdm
+pyyaml
 faster-whisper==1.0.3  # local STT fallback
 groq                   # cloud STT — Whisper large-v3
 edge-tts==6.1.12       # Greek TTS
